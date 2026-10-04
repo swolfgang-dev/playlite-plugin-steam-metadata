@@ -1,0 +1,28 @@
+{
+  "id": "Steam",
+  "name": "Steam",
+  "version": "1.0.0",
+  "api_version": 1,
+  "fields": [
+    "Name",
+    "SortingName",
+    "ReleaseDate",
+    "Genres",
+    "Developers",
+    "Publishers",
+    "Platforms",
+    "Features",
+    "Description",
+    "FullDescription",
+    "Links",
+    "CriticScore",
+    "Icon",
+    "CoverImage",
+    "HeaderImage",
+    "BackgroundImage"
+  ],
+  "enabled": true,
+  "repository": "swolfgang-dev/playlite-plugin-steam",
+  "minimum_playlite_version": "0.2.0",
+  "description": "Steam metadata and all advertised Steam artwork."
+}
