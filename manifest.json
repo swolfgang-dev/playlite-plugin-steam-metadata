@@ -24,5 +24,6 @@
   "enabled": true,
   "repository": "swolfgang-dev/playlite-plugin-steam",
   "minimum_playlite_version": "0.2.0",
-  "description": "Steam metadata and all advertised Steam artwork."
+  "description": "Steam metadata and all advertised Steam artwork.",
+  "distribution_repository": "swolfgang-dev/playlite-plugin-steam-releases"
 }

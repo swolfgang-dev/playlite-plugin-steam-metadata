@@ -41,3 +41,9 @@ Tests requiring absent plugins are skipped. The release workflow checks Python
 syntax and builds the standalone archive; integration tests run locally with
 Playlite installed. Native executables are not bundled in the SteamAutoCrack
 plugin; its separate tool installer downloads/builds them when requested.
+
+## Distribution
+
+Packages are published separately to `swolfgang-dev/playlite-plugin-steam-releases`. Its visibility controls anonymous browsing and downloads independently of this private development repository.
+
+After updating the manifest version, publish with `python3 tools/publish_distribution.py vVERSION` using your authenticated GitHub CLI. For automatic publishing on version tags, configure the repository Actions secret `PLUGIN_DISTRIBUTION_TOKEN` with a fine-grained token granting Contents read/write access to the distribution repository. The workflow never changes repository visibility.
