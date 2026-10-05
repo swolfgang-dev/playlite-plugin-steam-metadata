@@ -1,4 +1,4 @@
-# Steam for Playlite
+# Steam Metadata for Playlite
 
 Steam metadata and all advertised Steam artwork.
 
