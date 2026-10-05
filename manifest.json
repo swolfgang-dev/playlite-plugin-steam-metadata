@@ -1,7 +1,7 @@
 {
   "id": "Steam",
   "name": "Steam Metadata",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "api_version": 1,
   "fields": [
     "Name",
@@ -24,6 +24,5 @@
   "enabled": true,
   "repository": "swolfgang-dev/playlite-plugin-steam-metadata",
   "minimum_playlite_version": "0.2.0",
-  "description": "Steam metadata and all advertised Steam artwork.",
-  "distribution_repository": "swolfgang-dev/playlite-plugin-steam-metadata-releases"
+  "description": "Steam metadata and all advertised Steam artwork."
 }
