@@ -1,7 +1,7 @@
 {
   "id": "Steam",
-  "name": "Steam",
-  "version": "1.0.0",
+  "name": "Steam Metadata",
+  "version": "1.0.1",
   "api_version": 1,
   "fields": [
     "Name",
