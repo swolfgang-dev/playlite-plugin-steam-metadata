@@ -1,5 +1,5 @@
 from plugin_test_support import require_plugin
-require_plugin('Steam')
+require_plugin('SteamMetadata')
 import copy
 import os
 from pathlib import Path
@@ -11,7 +11,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 from playlite.editor import MetadataEditor
-from playlite_plugins.steam.metadata import MetadataError, fetch_metadata, merge_links, normalize, search_games, steam_id
+from playlite_plugins.steammetadata.metadata import MetadataError, fetch_metadata, merge_links, normalize, search_games, steam_id
 from playlite.metadata_dialog import MetadataDownloader
 from playlite.providers import discover_providers
 
@@ -25,7 +25,8 @@ STORE_GAME = {'type': 'game', 'name': 'Test Game', 'developers': ['Studio'], 'pu
 
 class ProviderTests(unittest.TestCase):
     def setUp(self):
-        fixture = discover_providers(include_disabled=True)
+        available = discover_providers(include_disabled=True)
+        fixture = {key: available[key] for key in ('SteamMetadata', 'IGDB') if key in available}
         patcher = patch('playlite.providers.discover_providers', return_value=fixture)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -55,29 +56,29 @@ class ProviderTests(unittest.TestCase):
             dialog = MetadataDownloader({'Name': 'Example'}, settings_path=settings, mode='metadata')
             action = dialog.list_identity('Action')
             rpg = dialog.list_identity('RPG')
-            dialog.review_defaults = {'Name': {'source': 'Steam'}, 'Genres': {'checked': [action, rpg]}}
+            dialog.review_defaults = {'Name': {'source': 'SteamMetadata'}, 'Genres': {'checked': [action, rpg]}}
             dialog.remove_list_defaults([('Genres', action)])
             reopened = MetadataDownloader({'Name': 'Example'}, settings_path=settings, mode='metadata')
-            self.assertEqual(reopened.review_defaults, {'Name': {'source': 'Steam'}, 'Genres': {'checked': [rpg]}})
+            self.assertEqual(reopened.review_defaults, {'Name': {'source': 'SteamMetadata'}, 'Genres': {'checked': [rpg]}})
             dialog.close()
             reopened.close()
 
     def test_save_ids_keeps_downloader_open(self):
         saved = []
         dialog = MetadataDownloader({'Name': 'Example'}, mode='metadata', save_ids=saved.append)
-        dialog.id_fields['Steam'].setText('123')
+        dialog.id_fields['SteamMetadata'].setText('123')
         dialog.save_metadata_ids()
-        self.assertEqual(saved, [{'Steam': '123'}])
+        self.assertEqual(saved, [{'SteamMetadata': '123'}])
         self.assertFalse(dialog.closed)
-        self.assertEqual(dialog.current['MetadataIds'], {'Steam': '123'})
+        self.assertEqual(dialog.current['MetadataIds'], {'SteamMetadata': '123'})
         dialog.close()
 
     def test_link_inferred_id_only_prefills_search(self):
         url = 'https://store.steampowered.com/app/123/'
         dialog = MetadataDownloader({'Name': 'Example', 'Links': [{'Name': 'Steam', 'Url': url}]}, mode='metadata')
-        self.assertEqual(dialog.id_fields['Steam'].text(), '')
-        self.assertNotIn('Steam', dialog.metadata_ids)
-        dialog.provider_queue = ['Steam']
+        self.assertEqual(dialog.id_fields['SteamMetadata'].text(), '')
+        self.assertNotIn('SteamMetadata', dialog.metadata_ids)
+        dialog.provider_queue = ['SteamMetadata']
         with patch.object(dialog, 'search'):
             dialog.start_next_provider()
         self.assertEqual(dialog.query.text(), url)
@@ -85,14 +86,14 @@ class ProviderTests(unittest.TestCase):
         with patch.object(dialog, 'choose_result') as choose:
             dialog.show_results([{'id': 123, 'name': 'Example'}], url)
             choose.assert_not_called()
-        self.assertEqual(dialog.id_fields['Steam'].text(), '')
+        self.assertEqual(dialog.id_fields['SteamMetadata'].text(), '')
         dialog.reject()
         dialog.cache.cleanup()
 
     def test_explicit_id_hides_search_until_resolution_fails(self):
-        dialog = MetadataDownloader({'Name': 'Example', 'MetadataIds': {'Steam': '123'}}, mode='metadata')
-        dialog.id_fields['Steam'].setText('123')
-        dialog.provider_queue = ['Steam']
+        dialog = MetadataDownloader({'Name': 'Example', 'MetadataIds': {'SteamMetadata': '123'}}, mode='metadata')
+        dialog.id_fields['SteamMetadata'].setText('123')
+        dialog.provider_queue = ['SteamMetadata']
         with patch.object(dialog, 'search'):
             dialog.start_next_provider()
         self.assertEqual(dialog.pages.currentIndex(), 0)
@@ -106,9 +107,9 @@ class ProviderTests(unittest.TestCase):
         dialog.close()
 
     def test_saved_ids_are_used_and_selection_records_id(self):
-        dialog = MetadataDownloader({'Name': 'Example', 'MetadataIds': {'Steam': '123'}}, mode='metadata')
-        self.assertEqual(dialog.id_fields['Steam'].text(), '123')
-        dialog.change_provider('Steam')
+        dialog = MetadataDownloader({'Name': 'Example', 'MetadataIds': {'SteamMetadata': '123'}}, mode='metadata')
+        self.assertEqual(dialog.id_fields['SteamMetadata'].text(), '123')
+        dialog.change_provider('SteamMetadata')
         self.assertEqual(dialog.query.text(), '123')
         dialog.id_fields['IGDB'].setText('456')
         dialog.change_provider('IGDB')
@@ -119,14 +120,14 @@ class ProviderTests(unittest.TestCase):
             dialog.choose_result(dialog.results.item(0))
         self.assertEqual(dialog.id_fields['IGDB'].text(), '789')
         dialog.prepared({})
-        self.assertEqual(dialog.applied['MetadataIds'], {'Steam': '123', 'IGDB': '789'})
+        self.assertEqual(dialog.applied['MetadataIds'], {'SteamMetadata': '123', 'IGDB': '789'})
 
     def test_exact_source_results_skip_manual_selection(self):
         dialog = MetadataDownloader({'Name': 'Example'}, mode='metadata')
         cases = [
-            ('Steam', 'https://store.steampowered.com/app/123/example/', [123], True),
-            ('Steam', 'Example', [123], False),
-            ('Steam', 'https://store.steampowered.com/app/123/', [456], False),
+            ('SteamMetadata', 'https://store.steampowered.com/app/123/example/', [123], True),
+            ('SteamMetadata', 'Example', [123], False),
+            ('SteamMetadata', 'https://store.steampowered.com/app/123/', [456], False),
             ('IGDB', 'https://www.igdb.com/games/example', [123], True),
             ('IGDB', '123', [123], True),
             ('IGDB', 'Example', [123], False),
@@ -144,10 +145,10 @@ class ProviderTests(unittest.TestCase):
     def test_source_columns_default_on_and_bulk_controls_are_independent(self):
         dialog = MetadataDownloader({'Name': 'Example'}, mode='metadata')
         self.assertTrue(all(toggle.isChecked() == toggle.isEnabled() for toggles in dialog.source_toggles.values() for toggle in toggles.values()))
-        dialog.column_toggles['Steam'].click()
-        self.assertTrue(all(not toggles['Steam'].isChecked() and toggles['IGDB'].isChecked() == toggles['IGDB'].isEnabled() for toggles in dialog.source_toggles.values()))
-        dialog.column_toggles['Steam'].click()
-        self.assertTrue(all(toggles['Steam'].isChecked() == toggles['Steam'].isEnabled() for toggles in dialog.source_toggles.values()))
+        dialog.column_toggles['SteamMetadata'].click()
+        self.assertTrue(all(not toggles['SteamMetadata'].isChecked() and toggles['IGDB'].isChecked() == toggles['IGDB'].isEnabled() for toggles in dialog.source_toggles.values()))
+        dialog.column_toggles['SteamMetadata'].click()
+        self.assertTrue(all(toggles['SteamMetadata'].isChecked() == toggles['SteamMetadata'].isEnabled() for toggles in dialog.source_toggles.values()))
         self.assertTrue(dialog.skip_existing.isHidden())
         self.assertTrue(dialog.save_defaults.isHidden())
         dialog.reject()
@@ -161,21 +162,21 @@ class ProviderTests(unittest.TestCase):
                 dialog = MetadataDownloader(current, settings_path=settings, mode='metadata')
                 dialog.selected_fields = ['Name', 'Genres']
                 dialog.provider_payloads = {
-                    'Steam': {'fields': {'Name': 'Steam name', 'Genres': ['Action']}},
+                    'SteamMetadata': {'fields': {'Name': 'Steam name', 'Genres': ['Action']}},
                     'IGDB': {'fields': {'Name': 'IGDB name', 'Genres': ['RPG']}},
                 }
                 dialog.show_combined_preview()
                 return dialog
             dialog = create()
-            dialog.source_select_buttons['Steam'].click()
+            dialog.source_select_buttons['SteamMetadata'].click()
             dialog.choices['Genres']['options']['IGDB'][0][0].setChecked(True)
             dialog.set_review_defaults()
             dialog.reject()
             dialog.cache.cleanup()
             reopened = create()
-            self.assertTrue(reopened.choices['Name']['options']['Steam'][0].isChecked())
+            self.assertTrue(reopened.choices['Name']['options']['SteamMetadata'][0].isChecked())
             self.assertFalse(reopened.choices['Genres']['options']['Current'][0][0].isChecked())
-            self.assertTrue(reopened.choices['Genres']['options']['Steam'][0][0].isChecked())
+            self.assertTrue(reopened.choices['Genres']['options']['SteamMetadata'][0][0].isChecked())
             self.assertTrue(reopened.choices['Genres']['options']['IGDB'][0][0].isChecked())
             reopened.apply()
             self.assertEqual(reopened.applied, {'Name': 'Steam name', 'Genres': ['Action', 'RPG']})
@@ -193,12 +194,12 @@ class ProviderTests(unittest.TestCase):
         for toggles in dialog.source_toggles.values():
             for toggle in toggles.values():
                 toggle.setChecked(False)
-        dialog.source_toggles['Name']['Steam'].setChecked(True)
-        dialog.source_toggles['Genres']['Steam'].setChecked(True)
+        dialog.source_toggles['Name']['SteamMetadata'].setChecked(True)
+        dialog.source_toggles['Genres']['SteamMetadata'].setChecked(True)
         dialog.source_toggles['Genres']['IGDB'].setChecked(True)
         dialog.selected_fields = ['Name', 'Genres', 'ReleaseDate']
         dialog.provider_payloads = {
-            'Steam': {'fields': {'Name': 'Steam name', 'Genres': ['Steam genre']}},
+            'SteamMetadata': {'fields': {'Name': 'Steam name', 'Genres': ['Steam genre']}},
             'IGDB': {'fields': {'Name': 'Ignored', 'Genres': ['IGDB genre']}},
         }
         dialog.show_combined_preview()
@@ -217,16 +218,16 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(steam_id('https://store.steampowered.com/app/1234/Test/'), 1234)
         self.assertIsNone(steam_id('https://evil.example/app/1234/'))
         self.assertIsNone(steam_id('0'))
-        with patch('playlite_plugins.steam.metadata.request_json', return_value={'1234': {'success': True, 'data': STORE_GAME}}) as network:
+        with patch('playlite_plugins.steammetadata.metadata.request_json', return_value={'1234': {'success': True, 'data': STORE_GAME}}) as network:
             for query in ('1234', 'https://store.steampowered.com/app/1234/Test/'):
                 self.assertEqual(search_games(query), [{'id': 1234, 'name': 'Test Game'}])
             self.assertEqual(network.call_count, 2)
 
     def test_direct_id_name_resolution_falls_back_when_unavailable(self):
         for response in ({}, {'1234': {'success': False}}, {'1234': {'success': True, 'data': {'type': 'game'}}}):
-            with patch('playlite_plugins.steam.metadata.request_json', return_value=response):
+            with patch('playlite_plugins.steammetadata.metadata.request_json', return_value=response):
                 self.assertEqual(search_games('1234'), [{'id': 1234, 'name': 'Steam app 1234'}])
-        with patch('playlite_plugins.steam.metadata.request_json', side_effect=MetadataError('Timeout')):
+        with patch('playlite_plugins.steammetadata.metadata.request_json', side_effect=MetadataError('Timeout')):
             self.assertEqual(search_games('1234'), [{'id': 1234, 'name': 'Steam app 1234'}])
 
     def test_normalization(self):
@@ -247,7 +248,7 @@ class ProviderTests(unittest.TestCase):
 
     def test_failed_or_non_game_lookup(self):
         for response in [{'1234': {'success': False}}, {'1234': {'success': True, 'data': {'type': 'music'}}}]:
-            with patch('playlite_plugins.steam.metadata.request_json', return_value=response):
+            with patch('playlite_plugins.steammetadata.metadata.request_json', return_value=response):
                 with self.assertRaises(MetadataError):
                     fetch_metadata(1234)
 
@@ -264,7 +265,8 @@ class ProviderTests(unittest.TestCase):
 
 class DownloaderTests(unittest.TestCase):
     def setUp(self):
-        fixture = discover_providers(include_disabled=True)
+        available = discover_providers(include_disabled=True)
+        fixture = {key: available[key] for key in ('SteamMetadata', 'IGDB') if key in available}
         patcher = patch('playlite.providers.discover_providers', return_value=fixture)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -279,8 +281,8 @@ class DownloaderTests(unittest.TestCase):
         self.assertIn('Description', available)
         self.assertTrue({'Icon', 'CoverImage', 'HeaderImage', 'BackgroundImage'} <= available)
         for key in ('Icon', 'CoverImage', 'HeaderImage', 'BackgroundImage'):
-            self.assertTrue(dialog.source_toggles[key]['Steam'].isEnabled())
-        self.assertEqual(list(dialog.table_providers), ['Steam', 'IGDB'])
+            self.assertTrue(dialog.source_toggles[key]['SteamMetadata'].isEnabled())
+        self.assertEqual(list(dialog.table_providers), ['SteamMetadata', 'IGDB'])
         dialog.reject()
         dialog.cache.cleanup()
 

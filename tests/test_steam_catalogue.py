@@ -1,5 +1,5 @@
 from plugin_test_support import require_plugin
-require_plugin('Steam')
+require_plugin('SteamMetadata')
 import unittest
 from io import BytesIO
 from pathlib import Path
@@ -8,7 +8,7 @@ from unittest.mock import patch
 from zipfile import ZipFile
 from PIL import Image
 from PyQt6.QtGui import QImageReader
-from playlite_plugins.steam.artwork import catalogue
+from playlite_plugins.steammetadata.artwork import catalogue
 from playlite.metadata import download_artwork
 
 
@@ -46,12 +46,12 @@ class CatalogueTests(unittest.TestCase):
                 self.assertFalse((Path(directory).parent / 'small.png').exists())
 
     def test_complete_catalogue_is_shared_across_tabs(self):
-        from playlite_plugins.steam.plugin import Provider
+        from playlite_plugins.steammetadata.plugin import Provider
         provider = Provider()
         responses = [{'data': {'620': {'common': {'icon': 'a' * 40}}}},
                      {'620': {'success': True, 'data': {
                          'header_image': 'https://shared.fastly.steamstatic.com/header.jpg'}}}]
-        with patch('playlite_plugins.steam.metadata.request_json', side_effect=responses) as request:
+        with patch('playlite_plugins.steammetadata.metadata.request_json', side_effect=responses) as request:
             provider.images(620, 'Icon')
             provider.images(620, 'CoverImage')
             provider.images(620, 'HeaderImage')

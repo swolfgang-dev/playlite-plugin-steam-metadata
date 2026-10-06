@@ -1,5 +1,5 @@
 from plugin_test_support import require_plugin
-require_plugin('Steam')
+require_plugin('SteamMetadata')
 import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from pathlib import Path
@@ -17,10 +17,16 @@ APP = QApplication.instance() or QApplication([])
 
 class SteamImageTests(unittest.TestCase):
     def setUp(self):
-        self.provider = discover_providers()['Steam']
+        self.provider = discover_providers()['SteamMetadata']
+        self.provider.image_defaults = {}
+        fixture = {'SteamMetadata': self.provider}
+        for target in ('playlite.image_dialog.discover_providers', 'playlite.providers.discover_providers'):
+            patcher = patch(target, return_value=fixture)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_opening_with_saved_id_searches_once_but_name_requires_search(self):
-        for game, expected in [({'Name': 'Example', 'MetadataIds': {'Steam': '620'}}, 1),
+        for game, expected in [({'Name': 'Example', 'MetadataIds': {'SteamMetadata': '620'}}, 1),
                                ({'Name': 'Example'}, 0)]:
             with self.subTest(game=game):
                 dialog = ImageDownloader(game)
@@ -59,7 +65,7 @@ class SteamImageTests(unittest.TestCase):
 
     def test_images_share_metadata_plugin_and_saved_id(self):
         self.assertNotIn('SteamImages', discover_plugins())
-        self.assertEqual(self.provider.query({'Name': 'Example', 'MetadataIds': {'Steam': '620'}}), '620')
+        self.assertEqual(self.provider.query({'Name': 'Example', 'MetadataIds': {'SteamMetadata': '620'}}), '620')
         self.assertEqual(self.provider.query({'Links': [{'Url': 'https://store.steampowered.com/app/620/'}]}),
                          'https://store.steampowered.com/app/620/')
 
@@ -70,12 +76,12 @@ class SteamImageTests(unittest.TestCase):
             calls.append((game_id, kind))
             return [{'url': kind, 'label': kind}]
         with patch.object(dialog, 'run', side_effect=lambda function, complete: complete(function())), \
-             patch.object(dialog.providers['Steam'], 'search', return_value=[{'id': 620, 'name': 'Example'}]) as search, \
+             patch.object(dialog.providers['SteamMetadata'], 'search', return_value=[{'id': 620, 'name': 'Example'}]) as search, \
              patch('playlite.image_dialog.run_dialog') as picker, \
-             patch.object(dialog.providers['Steam'], 'images', side_effect=candidates), \
+             patch.object(dialog.providers['SteamMetadata'], 'images', side_effect=candidates), \
              patch('playlite.image_dialog.download_artwork', side_effect=lambda url, target: str(target)):
             dialog.search()
-            self.assertEqual(calls, [(620, key) for key in dialog.image_keys])
+            self.assertEqual(calls, [(620, key) for key in dialog.image_keys if key in self.provider.image_types])
             for index in range(1, 4):
                 dialog.tabs.setCurrentIndex(index)
                 self.assertEqual(dialog.images.count(), 4)
@@ -128,8 +134,8 @@ class SteamImageTests(unittest.TestCase):
         item.setData(Qt.ItemDataRole.UserRole, 620)
         downloaded = []
         with patch.object(dialog, 'run_task', side_effect=lambda function, complete, message: downloaded.append(function())), \
-             patch.object(dialog.providers['Steam'], 'fetch', return_value={'images': {}, 'fields': {}}), \
-             patch.object(dialog.providers['Steam'], 'images', return_value=[{'url': 'missing'}, {'url': 'best'}, {'url': 'extra'}]), \
+             patch.object(dialog.providers['SteamMetadata'], 'fetch', return_value={'images': {}, 'fields': {}}), \
+             patch.object(dialog.providers['SteamMetadata'], 'images', return_value=[{'url': 'missing'}, {'url': 'best'}, {'url': 'extra'}]), \
              patch('playlite.metadata_dialog.download_artwork', side_effect=[MetadataError('404'), '/tmp/best.img']) as download:
             dialog.choose_result(item)
             self.assertEqual(download.call_count, 2)
@@ -144,8 +150,8 @@ class SteamImageTests(unittest.TestCase):
         other.image_types = {'Icon'}
         other.query.return_value = 'Other game'
         other.query_hint = 'Other query'
-        with patch('playlite.image_dialog.discover_providers', return_value={'Steam': self.provider, 'Other': other}):
-            dialog = ImageDownloader({'Name': 'Example', 'MetadataIds': {'Steam': '620'}})
+        with patch('playlite.image_dialog.discover_providers', return_value={'SteamMetadata': self.provider, 'Other': other}):
+            dialog = ImageDownloader({'Name': 'Example', 'MetadataIds': {'SteamMetadata': '620'}})
         search_patch = patch.object(dialog, 'search')
         search_patch.start()
         self.addCleanup(search_patch.stop)
@@ -166,26 +172,27 @@ class SteamImageTests(unittest.TestCase):
         dialog.reject()
 
     def test_tab_activation_searches_id_and_retains_matching_results(self):
-        dialog = ImageDownloader({'Name': 'Example', 'MetadataIds': {'Steam': '620'}})
+        dialog = ImageDownloader({'Name': 'Example', 'MetadataIds': {'SteamMetadata': '620'}})
+        dialog.initial_search_scheduled = True
         with patch.object(dialog, 'run', side_effect=lambda function, complete: complete(function())), \
-             patch.object(dialog.providers['Steam'], 'search', return_value=[{'id': 620, 'name': 'Example'}]) as search, \
-             patch.object(dialog.providers['Steam'], 'images', return_value=[]):
+             patch.object(dialog.providers['SteamMetadata'], 'search', return_value=[{'id': 620, 'name': 'Example'}]) as search, \
+             patch.object(dialog.providers['SteamMetadata'], 'images', return_value=[]):
             dialog.tabs.setCurrentIndex(1)
             search.assert_called_once_with('620')
             dialog.tabs.setCurrentIndex(2)
-            self.assertEqual(search.call_count, 2)
+            self.assertEqual(search.call_count, 1)
             dialog.tabs.setCurrentIndex(1)
-            self.assertEqual(search.call_count, 2)
+            self.assertEqual(search.call_count, 1)
             dialog.query.setText('123')
             dialog.tabs.setCurrentIndex(2)
-            self.assertEqual(search.call_count, 3)
+            self.assertEqual(search.call_count, 2)
             search.assert_called_with('123')
             dialog.query.setText('Example title')
             dialog.tabs.setCurrentIndex(3)
-            self.assertEqual(search.call_count, 3)
+            self.assertEqual(search.call_count, 2)
             dialog.query.clear()
             dialog.tabs.setCurrentIndex(0)
-            self.assertEqual(search.call_count, 3)
+            self.assertEqual(search.call_count, 2)
         dialog.reject()
 
     def test_multiple_search_results_require_selection(self):
@@ -202,15 +209,15 @@ class SteamImageTests(unittest.TestCase):
 
     def test_steam_icon_candidate(self):
         page = b'<div class="apphub_AppIcon"><img src="https://shared.akamai.steamstatic.com/community_assets/images/apps/620/icon.jpg"></div>'
-        with patch('playlite_plugins.steam.metadata.request_json', side_effect=MetadataError('Unavailable')), \
-             patch('playlite_plugins.steam.metadata.request', return_value=page):
+        with patch('playlite_plugins.steammetadata.metadata.request_json', side_effect=MetadataError('Unavailable')), \
+             patch('playlite_plugins.steammetadata.metadata.request', return_value=page):
             self.assertEqual(self.provider.images(620, 'Icon')[0]['label'], 'Community icon')
 
     def test_client_and_community_icons_from_app_info(self):
         common = {'clienticon': '566ae07473b877f0450bef7193ae08dedb00108a',
                   'icon': '4adaff16db14b2cf3bcfda2c523f0d4d68e15d6f'}
-        with patch('playlite_plugins.steam.metadata.request_json', return_value={'data': {'774361': {'common': common}}}), \
-             patch('playlite_plugins.steam.metadata.request') as community:
+        with patch('playlite_plugins.steammetadata.metadata.request_json', return_value={'data': {'774361': {'common': common}}}), \
+             patch('playlite_plugins.steammetadata.metadata.request') as community:
             candidates = self.provider.images(774361, 'Icon')
             self.assertEqual([item['label'] for item in candidates], ['Client icon', 'Community icon'])
             self.assertTrue(candidates[0]['url'].endswith(common['clienticon'] + '.ico'))
@@ -219,8 +226,8 @@ class SteamImageTests(unittest.TestCase):
 
     def test_bad_icon_hash_is_not_used_as_url(self):
         page = b'<div class="apphub_AppIcon"><img src="https://shared.fastly.steamstatic.com/icon.jpg"></div>'
-        with patch('playlite_plugins.steam.metadata.request_json', return_value={'data': {'620': {'common': {'clienticon': '../invalid'}}}}), \
-             patch('playlite_plugins.steam.metadata.request', return_value=page):
+        with patch('playlite_plugins.steammetadata.metadata.request_json', return_value={'data': {'620': {'common': {'clienticon': '../invalid'}}}}), \
+             patch('playlite_plugins.steammetadata.metadata.request', return_value=page):
             self.assertEqual(len(self.provider.images(620, 'Icon')), 1)
 
     def test_download_uses_largest_ico_frame(self):
@@ -244,19 +251,19 @@ class SteamImageTests(unittest.TestCase):
             'background_raw': 'https://shared.fastly.steamstatic.com/background.jpg',
             'screenshots': [{'path_full': 'https://shared.fastly.steamstatic.com/screen.jpg'},
                             {'path_full': 'https://shared.fastly.steamstatic.com/screen.jpg'}]}}}
-        with patch('playlite_plugins.steam.metadata.request_json', return_value=response):
+        with patch('playlite_plugins.steammetadata.metadata.request_json', return_value=response):
             covers = self.provider.images(620, 'CoverImage')
             headers = self.provider.images(620, 'HeaderImage')
             self.assertEqual(len(covers), 2)
             self.assertEqual(len(headers), 4)
             self.assertEqual(headers[2]['url'], response['620']['data']['header_image'])
-        with patch('playlite_plugins.steam.metadata.request_json', return_value={'620': {'success': False}}):
+        with patch('playlite_plugins.steammetadata.metadata.request_json', return_value={'620': {'success': False}}):
             with self.assertRaises(MetadataError):
                 self.provider.images(620, 'CoverImage')
 
     def test_selection_requires_apply_and_cancel_removes_temporary_files(self):
-        dialog = ImageDownloader({'Name': 'Example', 'MetadataIds': {'Steam': '620'}})
-        self.assertEqual(dialog.source.currentData(), 'Steam')
+        dialog = ImageDownloader({'Name': 'Example', 'MetadataIds': {'SteamMetadata': '620'}})
+        self.assertEqual(dialog.source.currentData(), 'SteamMetadata')
         self.assertEqual(dialog.query.text(), '620')
         path = Path(dialog.cache.name) / 'cover.img'
         path.write_bytes(b'example')
@@ -288,12 +295,12 @@ class SteamImageTests(unittest.TestCase):
         def run(function, complete):
             complete(function())
         with patch.object(dialog, 'run', side_effect=run), \
-             patch.object(dialog.providers['Steam'], 'images', side_effect=lambda game_id, kind: [
+             patch.object(dialog.providers['SteamMetadata'], 'images', side_effect=lambda game_id, kind: [
                  {'url': 'missing', 'label': 'Missing'}, {'url': 'valid', 'label': 'Valid'}] if kind == 'CoverImage' else []), \
              patch('playlite.image_dialog.download_artwork', side_effect=[MetadataError('404'), '/tmp/valid.img']):
             dialog.load_images()
         self.assertEqual(dialog.image_lists['CoverImage'].count(), 1)
-        self.assertEqual(dialog.tabs.count(), 4)
+        self.assertEqual(dialog.tabs.count(), 5)
         self.assertIn('Missing: 404', dialog.status.toolTip())
         dialog.reject()
 

@@ -26,7 +26,7 @@ class Provider(MetadataProvider):
     manual = True
 
     def query(self, game):
-        saved = (game.get('MetadataIds') or {}).get('Steam')
+        saved = (game.get('MetadataIds') or {}).get('SteamMetadata')
         if saved and metadata.steam_id(str(saved)):
             return str(saved)
         return next((link['Url'] for link in game.get('Links') or []

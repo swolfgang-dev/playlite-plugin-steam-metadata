@@ -1,7 +1,7 @@
 {
-  "id": "Steam",
+  "id": "SteamMetadata",
   "name": "Steam Metadata",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "api_version": 1,
   "fields": [
     "Name",
@@ -23,6 +23,28 @@
   ],
   "enabled": true,
   "repository": "swolfgang-dev/playlite-plugin-steam-metadata",
-  "minimum_playlite_version": "0.2.0",
-  "description": "Steam metadata and all advertised Steam artwork."
+  "minimum_playlite_version": "0.2.44",
+  "description": "Steam metadata and all advertised Steam artwork.",
+  "game_fields": [
+    {
+      "key": "SteamId",
+      "label": "Steam ID",
+      "metadata_provider": "SteamMetadata",
+      "positive_id": true
+    }
+  ],
+  "image_defaults": {
+    "BackgroundImage": {
+      "artwork": [
+        "BackgroundImage"
+      ],
+      "shape": [
+        "16:9"
+      ],
+      "resolution": [
+        1024,
+        1920
+      ]
+    }
+  }
 }
