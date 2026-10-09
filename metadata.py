@@ -13,27 +13,7 @@ from playlite.description_html import without_images
 from playlite.metadata import MetadataError
 
 
-def link_name(url, existing='', category=None):
-    host = (urllib.parse.urlsplit(url).hostname or '').removeprefix('www.')
-    if existing and existing.casefold() not in (host.casefold(), ('www.' + host).casefold()):
-        return existing
-    domains = {'steampowered.com': 'Steam', 'igdb.com': 'IGDB', 'facebook.com': 'Facebook',
-               'xbox.com': 'Xbox', 'playstation.com': 'PlayStation Store', 'twitter.com': 'Twitter',
-               'x.com': 'X', 'youtube.com': 'YouTube', 'youtu.be': 'YouTube', 'instagram.com': 'Instagram',
-               'discord.gg': 'Discord', 'discord.com': 'Discord', 'fandom.com': 'Community Wiki',
-               'wikia.com': 'Community Wiki', 'twitch.tv': 'Twitch', 'wikipedia.org': 'Wikipedia',
-               'gog.com': 'GOG', 'epicgames.com': 'Epic Games Store', 'itch.io': 'itch.io',
-               'reddit.com': 'Reddit', 'bsky.app': 'Bluesky'}
-    for domain, name in domains.items():
-        if host == domain or host.endswith('.' + domain):
-            return name
-    categories = {1: 'Official Website', 2: 'Community Wiki', 'official': 'Official Website',
-                  'wikia': 'Community Wiki', 'wiki': 'Community Wiki'}
-    return categories.get(category, host or existing)
-
-
-def friendly_links(links):
-    return [dict(link, Name=link_name(link.get('Url', ''), link.get('Name', ''))) for link in links]
+from playlite.metadata import link_name as link_name, friendly_links as friendly_links
 
 
 def request(url, limit=4 * 1024 * 1024):
