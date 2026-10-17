@@ -4,7 +4,7 @@ Steam metadata and all advertised Steam artwork.
 
 This repository contains only this plugin. Playlite itself lives in
 [swolfgang-dev/Playlite](https://github.com/swolfgang-dev/Playlite).
-Requires Playlite 0.2.0 or later, plugin API 1.
+Requires Playlite 0.2.88 or later, plugin API 1.
 
 ## Installation
 

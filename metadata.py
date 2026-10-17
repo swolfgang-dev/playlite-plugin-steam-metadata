@@ -1,8 +1,6 @@
 """Steam store metadata retrieval, independent of the library and UI."""
-from datetime import datetime
 import html
 import json
-from pathlib import Path
 import re
 import urllib.parse
 import urllib.request
@@ -10,7 +8,7 @@ from playlite.sorting_name import sorting_name
 from playlite.description_html import without_images
 
 
-from playlite.metadata import MetadataError
+from playlite.metadata import MetadataError, release_date, merge_links, download_artwork
 
 
 from playlite.metadata import link_name as link_name, friendly_links as friendly_links
@@ -68,15 +66,6 @@ def search_games(query):
             if isinstance(item, dict) and isinstance(item.get('id'), int) and isinstance(item.get('name'), str)]
 
 
-def release_date(value):
-    for pattern in ('%d %b, %Y', '%b %d, %Y', '%d %B, %Y', '%B %d, %Y', '%Y-%m-%d'):
-        try:
-            return datetime.strptime(value, pattern).date().isoformat()
-        except ValueError:
-            pass
-    return None
-
-
 def normalize(app_id, data):
     result = {}
     if data.get('name'):
@@ -132,77 +121,3 @@ def fetch_metadata(app_id):
         raise MetadataError('This result is not a game or DLC. Choose another result.')
     return normalize(app_id, entry['data'])
 
-
-def merge_links(existing, incoming):
-    result = [dict(link) for link in existing]
-    for link in incoming:
-        # Keep unrelated existing links; update the canonical Steam/website link.
-        by_name = next((old for old in result if old['Name'].casefold() == link['Name'].casefold()), None) \
-            if link['Name'].casefold() in ('steam', 'official website') else None
-        if by_name:
-            by_name.update(link)
-        elif not any(old['Url'].rstrip('/') == link['Url'].rstrip('/') for old in result):
-            result.append(dict(link))
-    return result
-
-
-def download_artwork(url, target):
-    parsed = urllib.parse.urlsplit(url)
-    if parsed.scheme != 'https' or not parsed.hostname or not (
-            parsed.hostname == 'images.igdb.com' or parsed.hostname in ('cdn.steamgriddb.com', 'shared.fastly.steamstatic.com') or parsed.hostname.endswith('.steamstatic.com') or parsed.hostname.endswith('.akamaihd.net')):
-        raise MetadataError('The source returned an unsupported artwork address.')
-    from PyQt6.QtGui import QImageReader
-    content = request(url, limit=20 * 1024 * 1024)
-    if content.startswith(b'PK\x03\x04') or parsed.path.lower().endswith('.tga'):
-        from io import BytesIO
-        from PIL import Image, UnidentifiedImageError
-        from zipfile import ZipFile, BadZipFile
-        try:
-            if content.startswith(b'PK\x03\x04'):
-                choices = []
-                with ZipFile(BytesIO(content)) as archive:
-                    for entry in archive.infolist():
-                        if entry.file_size > 20 * 1024 * 1024 or entry.is_dir():
-                            continue
-                        try:
-                            image = Image.open(BytesIO(archive.read(entry)))
-                            if image.width * image.height <= 40_000_000:
-                                image.load()
-                                choices.append(image.copy())
-                        except (UnidentifiedImageError, OSError, ValueError):
-                            continue
-                if not choices:
-                    raise ValueError('No images in icon archive')
-                image = max(choices, key=lambda item: item.width * item.height)
-            else:
-                image = Image.open(BytesIO(content))
-            output = BytesIO()
-            image.convert('RGBA').save(output, format='PNG')
-            content = output.getvalue()
-            target = Path(target).with_suffix('.png')
-        except (BadZipFile, OSError, ValueError, Image.DecompressionBombError) as error:
-            raise MetadataError('Could not read the downloaded client icon.') from error
-    target = Path(target)
-    target.write_bytes(content)
-    reader = QImageReader(str(target))
-    if not reader.canRead():
-        target.unlink(missing_ok=True)
-        raise MetadataError('The downloaded artwork is not a readable image.')
-    if bytes(reader.format()).lower() == b'ico':
-        # Qt defaults to the first ICO frame, often only 16×16. Keep the largest.
-        sizes = []
-        for index in range(reader.imageCount()):
-            if reader.jumpToImage(index):
-                size = reader.size()
-                sizes.append((size.width() * size.height(), index))
-        if sizes:
-            reader.jumpToImage(max(sizes)[1])
-        image = reader.read()
-        converted = target.with_suffix('.png')
-        if image.isNull() or not image.save(str(converted), 'PNG'):
-            target.unlink(missing_ok=True)
-            raise MetadataError('Could not read the downloaded client icon.')
-        if converted != target:
-            target.unlink(missing_ok=True)
-        target = converted
-    return str(target)

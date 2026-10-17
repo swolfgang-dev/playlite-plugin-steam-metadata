@@ -10,9 +10,21 @@ from PIL import Image
 from PyQt6.QtGui import QImageReader
 from playlite_plugins.steammetadata.artwork import catalogue
 from playlite.metadata import download_artwork
+from playlite.metadata import MetadataError
 
 
 class CatalogueTests(unittest.TestCase):
+    def test_icon_archive_entry_limit_prevents_unbounded_decoding(self):
+        content = BytesIO()
+        with ZipFile(content, 'w') as archive:
+            for index in range(257):
+                archive.writestr(str(index) + '.png', b'')
+        with TemporaryDirectory() as directory, patch('playlite.metadata.request', return_value=content.getvalue()):
+            target = Path(directory) / 'icon.img'
+            with self.assertRaisesRegex(MetadataError, 'client icon'):
+                download_artwork('https://shared.fastly.steamstatic.com/icon.zip', target)
+            self.assertFalse(target.exists())
+
     def test_localized_hashed_library_art_and_cdn_deduplication(self):
         common = {'library_assets_full': {
             'library_capsule': {'image': {'english': 'hash/library_600x900.jpg',

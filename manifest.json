@@ -23,7 +23,7 @@
   ],
   "enabled": true,
   "repository": "swolfgang-dev/playlite-plugin-steam-metadata",
-  "minimum_playlite_version": "0.2.44",
+  "minimum_playlite_version": "0.2.88",
   "description": "Steam metadata and all advertised Steam artwork.",
   "game_fields": [
     {
